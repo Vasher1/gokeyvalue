@@ -9,7 +9,14 @@ import (
 )
 
 func main() {
-	c, err := net.Dial("tcp", "localhost:4000")
+	arguments := os.Args
+	if len(arguments) == 1 {
+		fmt.Println("Please provide host:port.")
+		return
+	}
+
+	CONNECT := arguments[1]
+	c, err := net.Dial("tcp", CONNECT)
 	if err != nil {
 		fmt.Println(err)
 		return

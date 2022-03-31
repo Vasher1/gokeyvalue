@@ -1,8 +1,9 @@
-package controllers
+package main
 
 import (
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"keyvaluepairexercise/service"
 	"net/http"
 	"strings"
@@ -15,8 +16,8 @@ func (controller keyvalueHttpController) ServeHTTP(w http.ResponseWriter, r *htt
 		switch r.Method {
 		case http.MethodGet:
 			getAll(w, r)
-		case http.MethodPost:
-			post(w, r)
+		case http.MethodPut:
+			put(w, r)
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
 		}
@@ -34,62 +35,53 @@ func (controller keyvalueHttpController) ServeHTTP(w http.ResponseWriter, r *htt
 	}
 }
 
+func newKeyValueHttpController() *keyvalueHttpController {
+	service.Initialise()
+
+	return &keyvalueHttpController{}
+}
+
 func getAll(w http.ResponseWriter, r *http.Request) {
 	err, store := service.ReadAll()
 
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+	if handlePotentialError(err, w) {
 		return
 	}
 
 	encodeResponseAsJSON(store, w)
 }
 
-func get(id string, w http.ResponseWriter) {
-	err, value := service.Read(id)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+func get(key string, w http.ResponseWriter) {
+	err, value := service.Read(key)
+	if handlePotentialError(err, w) {
 		return
 	}
 
 	encodeResponseAsJSON(value, w)
 }
 
-func post(w http.ResponseWriter, r *http.Request) {
+func put(w http.ResponseWriter, r *http.Request) {
 	request, err := parseRequest(r)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Could not parse request object"))
+	if handlePotentialError(err, w) {
 		return
 	}
 
 	err = service.Add(request.Key, request.Value)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+	if handlePotentialError(err, w) {
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func delete(id string, w http.ResponseWriter) {
-	err := service.Remove(id)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+func delete(key string, w http.ResponseWriter) {
+	err := service.Remove(key)
+
+	if handlePotentialError(err, w) {
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-}
-
-func newKeyValueHttpController() *keyvalueHttpController {
-	service.Initialise()
-
-	return &keyvalueHttpController{}
 }
 
 func encodeResponseAsJSON(data interface{}, w io.Writer) {
@@ -98,13 +90,27 @@ func encodeResponseAsJSON(data interface{}, w io.Writer) {
 }
 
 func parseRequest(r *http.Request) (AddRequest, error) {
-	dec := json.NewDecoder(r.Body)
-	var request AddRequest
-	err := dec.Decode(&request)
+	var parsedRequest AddRequest
+
+	data, err := ioutil.ReadAll(r.Body)
+	json.Unmarshal(data, &parsedRequest)
+
 	if err != nil {
-		return AddRequest{}, err
+		return parsedRequest, err
 	}
-	return request, nil
+
+	return parsedRequest, nil
+}
+
+func handlePotentialError(err error, w http.ResponseWriter) (errorFound bool) {
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+
+		return true
+	}
+
+	return false
 }
 
 type AddRequest struct {
