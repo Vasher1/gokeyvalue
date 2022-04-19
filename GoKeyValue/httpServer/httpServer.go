@@ -1,48 +1,48 @@
-package main
+package httpServer
 
 import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
-	"keyvaluepairexercise/service"
+	"keyvaluepairexercise/keyValueService"
 	"net/http"
 	"strings"
 )
 
-type keyvalueHttpController struct{}
+func HttpListen() {
+	http.HandleFunc("/keyvalue", handler)
+	http.HandleFunc("/keyvalue/", pathHandler)
+	http.ListenAndServe(":8080", nil)
+}
 
-func (controller keyvalueHttpController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/keyvalue" {
-		switch r.Method {
-		case http.MethodGet:
-			getAll(w, r)
-		case http.MethodPut:
-			put(w, r)
-		default:
-			w.WriteHeader(http.StatusNotImplemented)
-		}
-	} else {
-		id := strings.TrimPrefix(r.URL.Path, "/keyvalue/")
-
-		switch r.Method {
-		case http.MethodGet:
-			get(id, w)
-		case http.MethodDelete:
-			delete(id, w)
-		default:
-			w.WriteHeader(http.StatusNotImplemented)
-		}
+func handler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		getAll(w, r)
+	case http.MethodPut:
+		put(w, r)
+	default:
+		w.WriteHeader(http.StatusNotImplemented)
 	}
 }
 
-func newKeyValueHttpController() *keyvalueHttpController {
-	service.Initialise()
+func pathHandler(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/keyvalue/")
 
-	return &keyvalueHttpController{}
+	switch r.Method {
+	case http.MethodGet:
+		get(id, w)
+	case http.MethodDelete:
+		delete(id, w)
+	default:
+		w.WriteHeader(http.StatusNotImplemented)
+	}
 }
 
+// Methods
+
 func getAll(w http.ResponseWriter, r *http.Request) {
-	err, store := service.ReadAll()
+	err, store := keyValueService.ReadAll()
 
 	if handlePotentialError(err, w) {
 		return
@@ -52,7 +52,7 @@ func getAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func get(key string, w http.ResponseWriter) {
-	err, value := service.Read(key)
+	err, value := keyValueService.Read(key)
 	if handlePotentialError(err, w) {
 		return
 	}
@@ -66,7 +66,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = service.Add(request.Key, request.Value)
+	err = keyValueService.Add(request.Key, request.Value)
 	if handlePotentialError(err, w) {
 		return
 	}
@@ -75,7 +75,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 }
 
 func delete(key string, w http.ResponseWriter) {
-	err := service.Remove(key)
+	err := keyValueService.Remove(key)
 
 	if handlePotentialError(err, w) {
 		return
@@ -84,13 +84,15 @@ func delete(key string, w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// Helpers
+
 func encodeResponseAsJSON(data interface{}, w io.Writer) {
 	enc := json.NewEncoder(w)
 	enc.Encode(data)
 }
 
-func parseRequest(r *http.Request) (AddRequest, error) {
-	var parsedRequest AddRequest
+func parseRequest(r *http.Request) (addRequest, error) {
+	var parsedRequest addRequest
 
 	data, err := ioutil.ReadAll(r.Body)
 	json.Unmarshal(data, &parsedRequest)
@@ -113,7 +115,9 @@ func handlePotentialError(err error, w http.ResponseWriter) (errorFound bool) {
 	return false
 }
 
-type AddRequest struct {
+// Structs
+
+type addRequest struct {
 	Key   string
 	Value interface{}
 }
